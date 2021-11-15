@@ -82,12 +82,18 @@ if any( [ Sacc.start ] > [ Sacc.end ] )
     error( 'Saccade end latency < start latency.' )
 end
 
+EYE.etc.Sacc = Sacc;
+
 % Detect blinks
 startBlinkIdx = find( strcmp( 'STARTBLINK ', { EYE.event.type } ) );
 endBlinkIdx = find( strcmp( 'ENDBLINK', { EYE.event.type } ) );
 
-[ Blink( 1:length( startBlinkIdx ) ).start ] = EYE.event( startBlinkIdx ).latency;
-[ Blink.eye ] = EYE.event( startBlinkIdx ).eye;
+if ~isempty( startBlinkIdx )
+    [ Blink( 1:length( startBlinkIdx ) ).start ] = EYE.event( startBlinkIdx ).latency;
+    [ Blink.eye ] = EYE.event( startBlinkIdx ).eye;
+else
+    return
+end
 
 for iEye = unique( [ Blink.eye ] )
 
@@ -105,6 +111,7 @@ for iEye = unique( [ Blink.eye ] )
     [ Blink( [ Blink.eye ] == iEye ).end ] = EYE.event( endBlinkIdx( [ EYE.event( endBlinkIdx ).eye ] == iEye ) ).latency;
 
 end
+
 
 if any( [ Blink.start ] > [ Blink.end ] )
     error( 'Blink end latency < start latency.' )
@@ -139,7 +146,6 @@ for iBlink = 1:length( Blink )
 
 end
 
-EYE.etc.Sacc = Sacc;
 EYE.etc.Blink = Blink;
 
 end
