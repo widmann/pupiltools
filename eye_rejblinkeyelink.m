@@ -2,12 +2,14 @@
 %                         rejection/interpolation
 %
 % Usage:
-%   >> [ EYE ] = eye_rejblinkeyelink( EYE, 'key1', value1, 'key2', value2, 
+%   >> [ EYE ] = eye_rejblinkeyelink( EYE, 'key1', value1, 'key2', value2,
 %                                     'keyn', valuen );
 %
 %  Inputs:
 %   EYE       - EEGLAB EEG structure
 %   'chans'   - vector channel indices to process
+%   'nosacc'  - ['error'|'warning'] throw error or warning if no enclosing
+%               saccade is found for blink {default: error}
 %
 % Outputs:
 %   EYE       - EEGLAB EEG structure
@@ -50,6 +52,9 @@ Arg = struct( varargin{ : } );
 if ~isfield( Arg, 'chans' ) || isempty( Arg.chans )
     error( 'chans input argument is required.' )
 end
+if ~isfield( Arg, 'nosacc' ) || isempty( Arg.nosacc )
+    Arg.nosacc = 'error';
+end
 
 if isempty( EYE.reject.rejmanualE )
     EYE.reject.rejmanualE = zeros( size( EYE.data ) );
@@ -65,12 +70,12 @@ endSaccIdx = find( strcmp( 'ENDSACC', { EYE.event.type } ) );
 for iEye = unique( [ Sacc.eye ] )
 
     if sum( [ Sacc.eye ] == iEye ) ~= sum( [ EYE.event( endSaccIdx ).eye ] == iEye )
-%         for iTmp = unique( [ Sacc.eye ] )
-%             fprintf( 'Eye %d saccade start latencies:', iTmp );
-%             [ Sacc( [ Sacc.eye ] == iTmp ).start ]
-%             fprintf( 'Eye %d saccade end latencies:', iTmp );
-%             [ EYE.event( endSaccIdx( [ EYE.event( endSaccIdx ).eye ] == iTmp ) ).latency ]
-%         end
+        %         for iTmp = unique( [ Sacc.eye ] )
+        %             fprintf( 'Eye %d saccade start latencies:', iTmp );
+        %             [ Sacc( [ Sacc.eye ] == iTmp ).start ]
+        %             fprintf( 'Eye %d saccade end latencies:', iTmp );
+        %             [ EYE.event( endSaccIdx( [ EYE.event( endSaccIdx ).eye ] == iTmp ) ).latency ]
+        %         end
         error( 'Number of STARTSACC events (%d) does not match number of ENDSACC events (%d) for eye %d.', sum( [ Sacc.eye ] == iEye ), length( endSaccIdx ), iEye )
     end
 
@@ -98,14 +103,14 @@ end
 for iEye = unique( [ Blink.eye ] )
 
     if sum( [ Blink.eye ] == iEye ) ~= sum( [ EYE.event( endBlinkIdx ).eye ] == iEye )
-%         for iTmp = unique( [ Blink.eye ] )
-%             [ Sacc( [ Sacc.eye ] == iTmp ).start; Sacc( [ Sacc.eye ] == iTmp ).end ]
-%             fprintf( 'Eye %d blink start latencies:', iTmp );
-%             [ Blink( [ Blink.eye ] == iTmp ).start ]
-%             fprintf( 'Eye %d blink end latencies:', iTmp );
-%             [ EYE.event( find( strcmp( 'ENDBLINK', { EYE.event.type } ) & [ EYE.event.eye ] == iTmp ) ).latency ]
-%         end
-        error( 'Number of STARTBLINK events (%d) does not match number of ENDBLINK events (%d) for eye %d. %d', sum( [ Blink.eye ] == iEye ), length( endBlinkIdx ), iEye )
+                for iTmp = unique( [ Blink.eye ] )
+%                     [ Sacc( [ Sacc.eye ] == iTmp ).start; Sacc( [ Sacc.eye ] == iTmp ).end ]
+                    fprintf( 'Eye %d blink start latencies:', iTmp );
+                    [ Blink( [ Blink.eye ] == iTmp ).start ]
+                    fprintf( 'Eye %d blink end latencies:', iTmp );
+                    [ EYE.event( endBlinkIdx( [ EYE.event( endBlinkIdx ).eye ] == iTmp ) ).latency ]
+                end
+        error( 'Number of STARTBLINK events (%d) does not match number of ENDBLINK events (%d) for eye %d. %d', sum( [ Blink.eye ] == iEye ), sum( [ EYE.event( endBlinkIdx ).eye ] == iEye ), iEye )
     end
 
     [ Blink( [ Blink.eye ] == iEye ).end ] = EYE.event( endBlinkIdx( [ EYE.event( endBlinkIdx ).eye ] == iEye ) ).latency;
@@ -123,26 +128,30 @@ for iBlink = 1:length( Blink )
 
     if isempty( saccIdx )
         saccIdx = find( [ Sacc.start ] <= Blink( iBlink ).start & [ Sacc.eye ] == Blink( iBlink ).eye, 1, 'last' );
-        warning( 'STARTBLINK latency equals STARTSACC latency.' )
+        if ~isempty( saccIdx )
+            warning( 'STARTBLINK latency equals STARTSACC latency for blink #%d, start latency %d, end latency %d, eye %d.', iBlink, Blink( iBlink ).start, Blink( iBlink ).end, Blink( iBlink ).eye )
+        end
     end
 
-    if isempty( saccIdx ) % Ongoing blink at file start; cut until end of first saccade
-%         saccIdx = find( [ sacc.end ] > blink( iBlink ).end & [ sacc.eye ] == blink( iBlink ).eye, 1, 'first' );
-%         EYE.reject.rejmanualE( Arg.chans( blink( iBlink ).eye ), 1:sacc( saccIdx ).end ) = 1;
-        Blink( iBlink )
-        [ Sacc( [ Sacc.eye ] == Blink( iBlink ).eye ).start ]
-        error( 'No saccade with STARTSACC <= STARTBLINK latency found.' )
-    end
+    if ~isempty( saccIdx )
+        if Sacc( saccIdx ).end < Blink( iBlink ).end
+            Blink( iBlink )
+            Sacc( saccIdx )
+            error( 'ENDSACC < ENDBLINK latency.' )
+        end
 
-    if Sacc( saccIdx ).end < Blink( iBlink ).end
-        Blink( iBlink )
-        Sacc( saccIdx )
-        error( 'ENDSACC < ENDBLINK latency.' )
+        Blink( iBlink ).STARTSACC = Sacc( saccIdx ).start;
+        Blink( iBlink ).ENDSACC = Sacc( saccIdx ).end;
+        EYE.reject.rejmanualE( Arg.chans( Blink( iBlink ).eye ), Blink( iBlink ).STARTSACC:Blink( iBlink ).ENDSACC ) = 1;
+    else
+        msg = sprintf( 'No saccade found for blink #%d, start latency %d, end latency %d, eye %d.', iBlink, Blink( iBlink ).start, Blink( iBlink ).end, Blink( iBlink ).eye );
+        if strcmp( Arg.nosacc, 'error' )
+            error( msg )
+        else
+            warning( msg )
+            EYE.reject.rejmanualE( Arg.chans( Blink( iBlink ).eye ), Blink( iBlink ).start:Blink( iBlink ).end ) = 1;
+        end
     end
-
-    Blink( iBlink ).STARTSACC = Sacc( saccIdx ).start;
-    Blink( iBlink ).ENDSACC = Sacc( saccIdx ).end;
-    EYE.reject.rejmanualE( Arg.chans( Blink( iBlink ).eye ), Blink( iBlink ).STARTSACC:Blink( iBlink ).ENDSACC ) = 1;
 
 end
 
