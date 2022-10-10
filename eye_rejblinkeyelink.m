@@ -67,6 +67,13 @@ endSaccIdx = find( strcmp( 'ENDSACC', { EYE.event.type } ) );
 [ Sacc( 1:length( startSaccIdx ) ).start ] = EYE.event( startSaccIdx ).latency;
 [ Sacc.eye ] = EYE.event( startSaccIdx ).eye;
 
+eyeArray = unique( [ Sacc.eye ] );
+if length( eyeArray ) == length( Arg.chans )
+    eyeIdx( eyeArray ) = Arg.chans;
+else
+    error( 'Number of channels does not equal number of eyes.' )
+end
+
 for iEye = unique( [ Sacc.eye ] )
 
     if sum( [ Sacc.eye ] == iEye ) ~= sum( [ EYE.event( endSaccIdx ).eye ] == iEye )
@@ -142,14 +149,15 @@ for iBlink = 1:length( Blink )
 
         Blink( iBlink ).STARTSACC = Sacc( saccIdx ).start;
         Blink( iBlink ).ENDSACC = Sacc( saccIdx ).end;
-        EYE.reject.rejmanualE( Arg.chans( Blink( iBlink ).eye ), Blink( iBlink ).STARTSACC:Blink( iBlink ).ENDSACC ) = 1;
+
+        EYE.reject.rejmanualE( Arg.chans( eyeIdx( Blink( iBlink ).eye ) ), Blink( iBlink ).STARTSACC:Blink( iBlink ).ENDSACC ) = 1;
     else
         msg = sprintf( 'No saccade found for blink #%d, start latency %d, end latency %d, eye %d.', iBlink, Blink( iBlink ).start, Blink( iBlink ).end, Blink( iBlink ).eye );
         if strcmp( Arg.nosacc, 'error' )
             error( msg )
         else
             warning( msg )
-            EYE.reject.rejmanualE( Arg.chans( Blink( iBlink ).eye ), Blink( iBlink ).start:Blink( iBlink ).end ) = 1;
+            EYE.reject.rejmanualE( Arg.chans( eyeIdx( Blink( iBlink ).eye ) ), Blink( iBlink ).start:Blink( iBlink ).end ) = 1;
         end
     end
 
