@@ -55,6 +55,9 @@ end
 if ~isfield( Arg, 'nosacc' ) || isempty( Arg.nosacc )
     Arg.nosacc = 'error';
 end
+if ~isfield( Arg, 'debug' ) || isempty( Arg.debug )
+    Arg.debug = 0;
+end
 
 if isempty( EYE.reject.rejmanualE )
     EYE.reject.rejmanualE = zeros( size( EYE.data ) );
@@ -124,20 +127,30 @@ for iEye = unique( [ Blink.eye ] )
 
 end
 
-
 if any( [ Blink.start ] > [ Blink.end ] )
     error( 'Blink end latency < start latency.' )
 end
 
+% Debug
+if Arg.debug
+    for iEye = unique( [ Sacc.eye ] )
+        fprintf( 'Eye %d saccade latencies:', iEye );
+        [ Sacc( [ Sacc.eye ] == iEye ).start; Sacc( [ Sacc.eye ] == iEye ).end ]
+    end
+    for iEye = unique( [ Blink.eye ] )
+        fprintf( 'Eye %d blink latencies:', iEye );
+        [ Sacc( [ Blink.eye ] == iEye ).start; Blink( [ Blink.eye ] == iEye ).end ]
+    end
+end
+
+% Mark blinks for rejection
 for iBlink = 1:length( Blink )
 
-    saccIdx = find( [ Sacc.start ] < Blink( iBlink ).start & [ Sacc.eye ] == Blink( iBlink ).eye, 1, 'last' );
+    saccIdx = find( [ Sacc.start ] <= Blink( iBlink ).start & [ Sacc.eye ] == Blink( iBlink ).eye, 1, 'last' );
 
-    if isempty( saccIdx )
-        saccIdx = find( [ Sacc.start ] <= Blink( iBlink ).start & [ Sacc.eye ] == Blink( iBlink ).eye, 1, 'last' );
-        if ~isempty( saccIdx )
-            warning( 'STARTBLINK latency equals STARTSACC latency for blink #%d, start latency %d, end latency %d, eye %d.', iBlink, Blink( iBlink ).start, Blink( iBlink ).end, Blink( iBlink ).eye )
-        end
+    % Warning if saccade onset equals blink onset
+    if ~isempty( saccIdx ) && Sacc( saccIdx ).start == Blink( iBlink ).start
+        warning( 'STARTBLINK latency equals STARTSACC latency for blink #%d, start latency %d, end latency %d, eye %d.', iBlink, Blink( iBlink ).start, Blink( iBlink ).end, Blink( iBlink ).eye )
     end
 
     if ~isempty( saccIdx )
