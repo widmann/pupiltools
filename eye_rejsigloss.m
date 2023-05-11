@@ -53,7 +53,7 @@ if isempty( EYE.reject.rejmanualE )
     EYE.reject.rejmanualE = zeros( size( EYE.data ) );
 end
 
-EYE.reject.rejmanualE( Arg.chans, : ) = EYE.reject.rejmanualE( Arg.chans, : ) | EYE.data( Arg.chans, : ) == 0;
+EYE.reject.rejmanualE( Arg.chans, : ) = EYE.reject.rejmanualE( Arg.chans, : ) | EYE.data( Arg.chans, : ) <= 0;
 
 end
 
